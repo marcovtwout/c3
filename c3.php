@@ -211,42 +211,42 @@ class C3 {
         switch ($route) {
             case 'html':
                 try {
-                    $this->send_file($this->build_html_report($codeCoverage, $path));
+                    $this->sendFile($this->buildHtmlReport($codeCoverage, $path));
                 } catch (Exception $e) {
                     $this->error($e->getMessage());
                 }
                 return $this->exit();
             case 'clover':
                 try {
-                    $this->send_file($this->build_clover_report($codeCoverage, $path));
+                    $this->sendFile($this->buildCloverReport($codeCoverage, $path));
                 } catch (Exception $e) {
                     $this->error($e->getMessage());
                 }
                 return $this->exit();
             case 'crap4j':
                 try {
-                    $this->send_file($this->build_crap4j_report($codeCoverage, $path));
+                    $this->sendFile($this->buildCrap4jReport($codeCoverage, $path));
                 } catch (Exception $e) {
                     $this->error($e->getMessage());
                 }
                 return $this->exit();
             case 'serialized':
                 try {
-                    $this->send_file($completeReport);
+                    $this->sendFile($completeReport);
                 } catch (Exception $e) {
                     $this->error($e->getMessage());
                 }
                 return $this->exit();
             case 'phpunit':
                 try {
-                    $this->send_file($this->build_phpunit_report($codeCoverage, $path));
+                    $this->sendFile($this->buildPhpunitReport($codeCoverage, $path));
                 } catch (Exception $e) {
                     $this->error($e->getMessage());
                 }
                 return $this->exit();
             case 'cobertura':
                 try {
-                    $this->send_file($this->build_cobertura_report($codeCoverage, $path));
+                    $this->sendFile($this->buildCoberturaReport($codeCoverage, $path));
                 } catch (Exception $e) {
                     $this->error($e->getMessage());
                 }
@@ -298,7 +298,7 @@ class C3 {
         }
     }
 
-    private function build_html_report(PHP_CodeCoverage $codeCoverage, $path)
+    private function buildHtmlReport(PHP_CodeCoverage $codeCoverage, $path)
     {
         $writer = new PHP_CodeCoverage_Report_HTML();
         $writer->process($codeCoverage, $path . 'html');
@@ -329,7 +329,7 @@ class C3 {
         return $path . '.tar';
     }
 
-    private function build_clover_report(PHP_CodeCoverage $codeCoverage, $path)
+    private function buildCloverReport(PHP_CodeCoverage $codeCoverage, $path)
     {
         $writer = new PHP_CodeCoverage_Report_Clover();
         $writer->process($codeCoverage, $path . '.clover.xml');
@@ -337,7 +337,7 @@ class C3 {
         return $path . '.clover.xml';
     }
 
-    private function build_crap4j_report(PHP_CodeCoverage $codeCoverage, $path)
+    private function buildCrap4jReport(PHP_CodeCoverage $codeCoverage, $path)
     {
         $writer = new PHP_CodeCoverage_Report_Crap4j();
         $writer->process($codeCoverage, $path . '.crap4j.xml');
@@ -345,7 +345,7 @@ class C3 {
         return $path . '.crap4j.xml';
     }
 
-    private function build_cobertura_report(PHP_CodeCoverage $codeCoverage, $path)
+    private function buildCoberturaReport(PHP_CodeCoverage $codeCoverage, $path)
     {
         if (!class_exists(\SebastianBergmann\CodeCoverage\Report\Cobertura::class)) {
             throw new Exception("Cobertura report requires php-code-coverage >= 9.2");
@@ -356,7 +356,7 @@ class C3 {
         return $path . '.cobertura.xml';
     }
 
-    private function build_phpunit_report(PHP_CodeCoverage $codeCoverage, $path)
+    private function buildPhpunitReport(PHP_CodeCoverage $codeCoverage, $path)
     {
         $writer = new PHP_CodeCoverage_Report_XML(\PHPUnit_Runner_Version::id());
         $writer->process($codeCoverage, $path . 'phpunit');
@@ -387,7 +387,7 @@ class C3 {
         return $path . '.tar';
     }
 
-    private function send_file($filename)
+    private function sendFile($filename)
     {
         if (!headers_sent()) {
             readfile($filename);
