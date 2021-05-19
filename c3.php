@@ -35,6 +35,11 @@ class C3 {
     private $errorLogFile;
 
     /**
+     * @var string
+     */
+    private $tempDir;
+
+    /**
      * @param string $configDir where to look for codeception.yml and codeception.dist.yml
      */
     public function __construct($configDir)
@@ -142,33 +147,30 @@ class C3 {
             $this->error($e->getMessage());
         }
 
-        if (!defined('C3_CODECOVERAGE_MEDIATE_STORAGE')) {
+        // workaround for 'zend_mm_heap corrupted' problem
+        gc_disable();
 
-            // workaround for 'zend_mm_heap corrupted' problem
-            gc_disable();
-
-            $memoryLimit = ini_get('memory_limit');
-            $requiredMemory = '384M';
-            if ((substr($memoryLimit, -1) === 'M' && (int)$memoryLimit < (int)$requiredMemory)
-                || (substr($memoryLimit, -1) === 'K' && (int)$memoryLimit < (int)$requiredMemory * 1024)
-                || (ctype_digit($memoryLimit) && (int)$memoryLimit < (int)$requiredMemory * 1024 * 1024)
-            ) {
-                ini_set('memory_limit', $requiredMemory);
-            }
-
-            define('C3_CODECOVERAGE_MEDIATE_STORAGE', Configuration::logDir() . 'c3tmp');
-            define('C3_CODECOVERAGE_PROJECT_ROOT', Configuration::projectDir());
-            define('C3_CODECOVERAGE_TESTNAME', $_SERVER['HTTP_X_CODECEPTION_CODECOVERAGE']);
+        $memoryLimit = ini_get('memory_limit');
+        $requiredMemory = '384M';
+        if ((substr($memoryLimit, -1) === 'M' && (int)$memoryLimit < (int)$requiredMemory)
+            || (substr($memoryLimit, -1) === 'K' && (int)$memoryLimit < (int)$requiredMemory * 1024)
+            || (ctype_digit($memoryLimit) && (int)$memoryLimit < (int)$requiredMemory * 1024 * 1024)
+        ) {
+            ini_set('memory_limit', $requiredMemory);
         }
 
-        if (!is_dir(C3_CODECOVERAGE_MEDIATE_STORAGE)) {
-            if (mkdir(C3_CODECOVERAGE_MEDIATE_STORAGE, 0777, true) === false) {
-                $this->error('Failed to create directory "' . C3_CODECOVERAGE_MEDIATE_STORAGE . '"');
+        $this->tempDir = Configuration::logDir() . 'c3tmp';
+        define('C3_CODECOVERAGE_PROJECT_ROOT', Configuration::projectDir());
+        define('C3_CODECOVERAGE_TESTNAME', $_SERVER['HTTP_X_CODECEPTION_CODECOVERAGE']);
+
+        if (!is_dir($this->tempDir)) {
+            if (mkdir($this->tempDir, 0777, true) === false) {
+                $this->error('Failed to create directory "' . $this->tempDir . '"');
             }
         }
 
         // evaluate base path for c3-related files
-        $path = realpath(C3_CODECOVERAGE_MEDIATE_STORAGE) . DIRECTORY_SEPARATOR . 'codecoverage';
+        $path = realpath($this->tempDir) . DIRECTORY_SEPARATOR . 'codecoverage';
 
         $requestedC3Report = (strpos($_SERVER['REQUEST_URI'], 'c3/report') !== false);
 
@@ -436,14 +438,14 @@ class C3 {
 
     private function clear()
     {
-        \Codeception\Util\FileSystem::doEmptyDir(C3_CODECOVERAGE_MEDIATE_STORAGE);
+        \Codeception\Util\FileSystem::doEmptyDir($this->tempDir);
     }
 
     private function error($message)
     {
         $errorLogFile = isset($this->errorLogFile) ?
             $this->errorLogFile :
-            C3_CODECOVERAGE_MEDIATE_STORAGE . DIRECTORY_SEPARATOR . 'error.txt';
+            $this->tempDir . DIRECTORY_SEPARATOR . 'error.txt';
         if (is_writable($errorLogFile)) {
             file_put_contents($errorLogFile, $message);
         } else {
