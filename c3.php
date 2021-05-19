@@ -71,6 +71,27 @@ class C3 {
      */
     public function run()
     {
+        $this->convertCookiesToHttpXHeaders();
+        if (!array_key_exists('HTTP_X_CODECEPTION_CODECOVERAGE', $_SERVER)) {
+            return;
+        }
+
+        $this->autoloadCodeception();
+        $this->registerPhpUnitCompatibility();
+        $this->initCodeception();
+
+        $path = realpath($this->tempDir) . DIRECTORY_SEPARATOR . 'codecoverage';
+        $completeReport = $currentReport = $path . '.serialized';
+        $requestedC3Report = (strpos($_SERVER['REQUEST_URI'], 'c3/report') !== false);
+        if ($requestedC3Report) {
+            $this->handleReportRequest($completeReport, $path);
+        } else {
+            $this->handleCoverageCollectionStartAndStop($currentReport);
+        }
+    }
+
+    private function convertCookiesToHttpXHeaders()
+    {
         if (isset($_COOKIE['CODECEPTION_CODECOVERAGE'])) {
             $cookie = json_decode($_COOKIE['CODECEPTION_CODECOVERAGE'], true);
 
@@ -88,12 +109,10 @@ class C3 {
                 }
             }
         }
+    }
 
-        if (!array_key_exists('HTTP_X_CODECEPTION_CODECOVERAGE', $_SERVER)) {
-            return;
-        }
-
-        // Autoload Codeception classes
+    private function autoloadCodeception()
+    {
         if (!class_exists('\\Codeception\\Codecept') || !function_exists('codecept_is_path_absolute')) {
             if (file_exists($this->autoloadRootDir . '/codecept.phar')) {
                 require_once 'phar://' . $this->autoloadRootDir . '/codecept.phar/autoload.php';
@@ -109,7 +128,10 @@ class C3 {
                 $this->error('Codeception is not loaded. Please check that either PHAR or Composer package can be used');
             }
         }
+    }
 
+    private function registerPhpUnitCompatibility()
+    {
         // phpunit codecoverage shimming
         if (!class_exists('PHP_CodeCoverage') and class_exists('SebastianBergmann\CodeCoverage\CodeCoverage')) {
             class_alias('SebastianBergmann\CodeCoverage\CodeCoverage', 'PHP_CodeCoverage');
@@ -125,7 +147,10 @@ class C3 {
         if (!class_exists('PHPUnit_Runner_Version') && class_exists('PHPUnit\Runner\Version')) {
             class_alias('PHPUnit\Runner\Version', 'PHPUnit_Runner_Version');
         }
+    }
 
+    private function initCodeception()
+    {
         // Load Codeception Config
         $configDistFile = $this->configDir . DIRECTORY_SEPARATOR . 'codeception.dist.yml';
         $configFile = $this->configDir . DIRECTORY_SEPARATOR . 'codeception.yml';
@@ -168,110 +193,108 @@ class C3 {
                 $this->error('Failed to create directory "' . $this->tempDir . '"');
             }
         }
+    }
 
-        // evaluate base path for c3-related files
-        $path = realpath($this->tempDir) . DIRECTORY_SEPARATOR . 'codecoverage';
+    private function handleReportRequest($completeReport, $path)
+    {
+        set_time_limit(0);
 
-        $requestedC3Report = (strpos($_SERVER['REQUEST_URI'], 'c3/report') !== false);
+        $route = ltrim(strrchr(rtrim($_SERVER['REQUEST_URI'], '/'), '/'), '/');
 
-        $completeReport = $currentReport = $path . '.serialized';
-        if ($requestedC3Report) {
-            set_time_limit(0);
+        if ($route === 'clear') {
+            $this->clear();
+            return $this->exit();
+        }
 
-            $route = ltrim(strrchr(rtrim($_SERVER['REQUEST_URI'], '/'), '/'), '/');
+        list($codeCoverage, ) = $this->factory($completeReport);
 
-            if ($route === 'clear') {
-                $this->clear();
+        switch ($route) {
+            case 'html':
+                try {
+                    $this->send_file($this->build_html_report($codeCoverage, $path));
+                } catch (Exception $e) {
+                    $this->error($e->getMessage());
+                }
                 return $this->exit();
-            }
+            case 'clover':
+                try {
+                    $this->send_file($this->build_clover_report($codeCoverage, $path));
+                } catch (Exception $e) {
+                    $this->error($e->getMessage());
+                }
+                return $this->exit();
+            case 'crap4j':
+                try {
+                    $this->send_file($this->build_crap4j_report($codeCoverage, $path));
+                } catch (Exception $e) {
+                    $this->error($e->getMessage());
+                }
+                return $this->exit();
+            case 'serialized':
+                try {
+                    $this->send_file($completeReport);
+                } catch (Exception $e) {
+                    $this->error($e->getMessage());
+                }
+                return $this->exit();
+            case 'phpunit':
+                try {
+                    $this->send_file($this->build_phpunit_report($codeCoverage, $path));
+                } catch (Exception $e) {
+                    $this->error($e->getMessage());
+                }
+                return $this->exit();
+            case 'cobertura':
+                try {
+                    $this->send_file($this->build_cobertura_report($codeCoverage, $path));
+                } catch (Exception $e) {
+                    $this->error($e->getMessage());
+                }
+                return $this->exit();
+        }
+    }
 
-            list($codeCoverage, ) = $this->factory($completeReport);
-
-            switch ($route) {
-                case 'html':
-                    try {
-                        $this->send_file($this->build_html_report($codeCoverage, $path));
-                    } catch (Exception $e) {
-                        $this->error($e->getMessage());
-                    }
-                    return $this->exit();
-                case 'clover':
-                    try {
-                        $this->send_file($this->build_clover_report($codeCoverage, $path));
-                    } catch (Exception $e) {
-                        $this->error($e->getMessage());
-                    }
-                    return $this->exit();
-                case 'crap4j':
-                    try {
-                        $this->send_file($this->build_crap4j_report($codeCoverage, $path));
-                    } catch (Exception $e) {
-                        $this->error($e->getMessage());
-                    }
-                    return $this->exit();
-                case 'serialized':
-                    try {
-                        $this->send_file($completeReport);
-                    } catch (Exception $e) {
-                        $this->error($e->getMessage());
-                    }
-                    return $this->exit();
-                case 'phpunit':
-                    try {
-                        $this->send_file($this->build_phpunit_report($codeCoverage, $path));
-                    } catch (Exception $e) {
-                        $this->error($e->getMessage());
-                    }
-                    return $this->exit();
-                case 'cobertura':
-                    try {
-                        $this->send_file($this->build_cobertura_report($codeCoverage, $path));
-                    } catch (Exception $e) {
-                        $this->error($e->getMessage());
-                    }
-                    return $this->exit();
-            }
-        } else {
-            list($codeCoverage, ) = $this->factory(null);
-            $codeCoverage->start(C3_CODECOVERAGE_TESTNAME);
-            if (!array_key_exists('HTTP_X_CODECEPTION_CODECOVERAGE_DEBUG', $_SERVER)) {
-                register_shutdown_function(
-                    function () use ($codeCoverage, $currentReport) {
-                        $codeCoverage->stop();
-                        if (!file_exists(dirname($currentReport))) { // verify directory exists
-                            if (!mkdir(dirname($currentReport), 0777, true)) {
-                                $this->error("Can't write CodeCoverage report into $currentReport");
-                            }
-                        }
-
-                        // This will either lock the existing report for writing and return it along with a file pointer,
-                        // or return a fresh PHP_CodeCoverage object without a file pointer. We'll merge the current request
-                        // into that coverage object, write it to disk, and release the lock. By doing this in the end of
-                        // the request, we avoid this scenario, where Request 2 overwrites the changes from Request 1:
-                        //
-                        //             Time ->
-                        // Request 1 [ <read>               <write>          ]
-                        // Request 2 [         <read>                <write> ]
-                        //
-                        // In addition, by locking the file for exclusive writing, we make sure no other request try to
-                        // read/write to the file at the same time as this request (leading to a corrupt file). flock() is a
-                        // blocking call, so it waits until an exclusive lock can be acquired before continuing.
-
-                        list($existingCodeCoverage, $file) = $this->factory($currentReport, true);
-                        $existingCodeCoverage->merge($codeCoverage);
-
-                        if ($file === null) {
-                            file_put_contents($currentReport, serialize($existingCodeCoverage), LOCK_EX);
-                        } else {
-                            fseek($file, 0);
-                            fwrite($file, serialize($existingCodeCoverage));
-                            fflush($file);
-                            flock($file, LOCK_UN);
-                            fclose($file);
+    private function handleCoverageCollectionStartAndStop($currentReport)
+    {
+        list($codeCoverage, ) = $this->factory(null);
+        $codeCoverage->start(C3_CODECOVERAGE_TESTNAME);
+        if (!array_key_exists('HTTP_X_CODECEPTION_CODECOVERAGE_DEBUG', $_SERVER)) {
+            register_shutdown_function(
+                function () use ($codeCoverage, $currentReport) {
+                    $codeCoverage->stop();
+                    if (!file_exists(dirname($currentReport))) { // verify directory exists
+                        if (!mkdir(dirname($currentReport), 0777, true)) {
+                            $this->error("Can't write CodeCoverage report into $currentReport");
                         }
                     }
-                );
-            }
+
+                    // This will either lock the existing report for writing and return it along with a file pointer,
+                    // or return a fresh PHP_CodeCoverage object without a file pointer. We'll merge the current request
+                    // into that coverage object, write it to disk, and release the lock. By doing this in the end of
+                    // the request, we avoid this scenario, where Request 2 overwrites the changes from Request 1:
+                    //
+                    //             Time ->
+                    // Request 1 [ <read>               <write>          ]
+                    // Request 2 [         <read>                <write> ]
+                    //
+                    // In addition, by locking the file for exclusive writing, we make sure no other request try to
+                    // read/write to the file at the same time as this request (leading to a corrupt file). flock() is a
+                    // blocking call, so it waits until an exclusive lock can be acquired before continuing.
+
+                    list($existingCodeCoverage, $file) = $this->factory($currentReport, true);
+                    $existingCodeCoverage->merge($codeCoverage);
+
+                    if ($file === null) {
+                        file_put_contents($currentReport, serialize($existingCodeCoverage), LOCK_EX);
+                    } else {
+                        fseek($file, 0);
+                        fwrite($file, serialize($existingCodeCoverage));
+                        fflush($file);
+                        flock($file, LOCK_UN);
+                        fclose($file);
+                    }
+                }
+            );
         }
     }
 
