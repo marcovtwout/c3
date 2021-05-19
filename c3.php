@@ -30,6 +30,11 @@ class C3 {
     private $autoloadRootDir;
 
     /**
+     * @var string
+     */
+    private $errorLogFile;
+
+    /**
      * @param string $configDir where to look for codeception.yml and codeception.dist.yml
      */
     public function __construct($configDir)
@@ -44,6 +49,14 @@ class C3 {
     public function setAutoloadRootDir($dir)
     {
         $this->autoloadRootDir = $dir;
+    }
+
+    /**
+     * @param string $file
+     */
+    public function setErrorLogFile($file)
+    {
+        $this->errorLogFile = $file;
     }
 
     /**
@@ -428,8 +441,8 @@ class C3 {
 
     private function error($message)
     {
-        $errorLogFile = defined('C3_CODECOVERAGE_ERROR_LOG_FILE') ?
-            C3_CODECOVERAGE_ERROR_LOG_FILE :
+        $errorLogFile = isset($this->errorLogFile) ?
+            $this->errorLogFile :
             C3_CODECOVERAGE_MEDIATE_STORAGE . DIRECTORY_SEPARATOR . 'error.txt';
         if (is_writable($errorLogFile)) {
             file_put_contents($errorLogFile, $message);
